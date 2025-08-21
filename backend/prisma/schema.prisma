@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String            @id @default(uuid())
+  email                  String            @unique
+  password               String
+  nickname               String
+  avatar                 String?
+  role                   String            @default("member")
+  isActive               Boolean           @default(true)
+  lastLogin              DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  chatMessages           ChatMessage[]
+  receivedFriendRequests Friend[]          @relation("UserReceivedRequests")
+  sentFriendRequests     Friend[]          @relation("UserSentRequests")
+  personalTodos          PersonalTodo[]
+  refreshTokens          RefreshToken[]
+  workspaceMembers       WorkspaceMember[]
+  ownedWorkspaces        Workspace[]       @relation("WorkspaceOwner")
+  chatNotifications      ChatNotification[]
+
+  @@map("users")
+}
+
+model Friend {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  friend    User     @relation("UserReceivedRequests", fields: [friendId], references: [id], onDelete: Cascade)
+  user      User     @relation("UserSentRequests", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
+  @@index([status])
+  @@map("friends")
+}
+
+model PersonalTodo {
+  id          String    @id @default(uuid())
+  userId      String
+  title       String
+  description String?   @db.Text
+  status      String    @default("pending")
+  priority    String    @default("medium")
+  startDate   DateTime?
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@index([startDate])
+  @@index([dueDate])
+  @@map("personal_todos")
+}
+
+model Workspace {
+  id           String            @id @default(uuid())
+  name         String
+  ownerId      String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  chatMessages ChatMessage[]
+  tasks        GroupTask[]
+  members      WorkspaceMember[]
+  owner        User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  chatNotifications ChatNotification[]
+
+  @@index([ownerId])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  accepted    Boolean   @default(false)
+  joinedAt    DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model GroupTask {
+  id          String    @id @default(uuid())
+  workspaceId String
+  title       String
+  description String?   @db.Text
+  department  String
+  status      String    @default("pending")
+  startDate   DateTime
+  dueDate     DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([department])
+  @@index([status])
+  @@index([startDate])
+  @@index([dueDate])
+  @@map("group_tasks")
+}
+
+model ChatMessage {
+  id          String    @id @default(uuid())
+  workspaceId String    
+  userId      String    
+  content     String    @db.Text
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt], map: "idx_createdAt")
+  @@index([userId], map: "idx_userId")
+  @@index([workspaceId], map: "idx_workspaceId")
+  @@map("chat_messages")
+}
+
+model ChatNotification {
+  id          String   @id @default(uuid())
+  userId      String
+  workspaceId String
+  unreadCount Int      @default(0)
+  lastReadAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("chat_notifications")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique @db.VarChar(512)
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

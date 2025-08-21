@@ -1,0 +1,122 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: team_collaboration
+      MYSQL_USER: teamuser
+      MYSQL_PASSWORD: teampassword
+      MYSQL_ROOT_HOST: "%"
+    ports:
+      - "3307:3306" # 외부(호스트) 3307, 내부는 항상 3306
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - team_network
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      # ✅ 내부 포트 3306 기준으로 핑
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -prootpassword",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration
+      SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration_shadow
+
+      JWT_SECRET: "${JWT_SECRET:-change_me_jwt_compat}"
+      ACCESS_TOKEN_SECRET: "${ACCESS_TOKEN_SECRET:-change_me_access}"
+      REFRESH_TOKEN_SECRET: "${REFRESH_TOKEN_SECRET:-change_me_refresh}"
+
+      ACCESS_TOKEN_EXPIRY: 15m
+      REFRESH_TOKEN_EXPIRY: 7d
+      API_PORT: 4000
+      SOCKET_PORT: 5000
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost:5173
+      DATABASE_POOL_SIZE: "10"
+      DATABASE_CONNECTION_TIMEOUT: "30000"
+      DATABASE_QUERY_TIMEOUT: "30000"
+    ports:
+      - "4000:4000"
+      - "5000:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - team_network
+    command: >
+      sh -lc "
+        npx prisma migrate deploy &&
+        node src/index.js
+      "
+    # (선택) 임시 헬스체크: 서비스 계속 unhealthy로 막히는 경우에만 켜기
+    # healthcheck:
+    #   test: ["CMD-SHELL", "exit 0"]
+    #   interval: 10s
+    #   timeout: 3s
+    #   retries: 1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prisma-studio:
+    build:
+      context: ./backend
+    working_dir: /app
+    environment:
+      TZ: Asia/Seoul
+      DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration
+      NODE_ENV: production
+    volumes:
+      - ./backend:/app
+      - node_modules:/app/node_modules
+    ports:
+      - "5555:5555"
+    networks:
+      - team_network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command:
+      [
+        "sh",
+        "-lc",
+        "exec npx prisma studio --port 5555 --hostname 0.0.0.0 --browser none",
+      ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  mysql_data:
+  node_modules:
+
+networks:
+  team_network:
+    driver: bridge

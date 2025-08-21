@@ -1,0 +1,138 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: team_collaboration_dev
+      MYSQL_USER: teamuser
+      MYSQL_PASSWORD: teampassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - team_network_dev
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --general-log=1
+      --general-log-file=/var/lib/mysql/general.log
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -prootpassword",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      DATABASE_URL: "mysql://teamuser:teampassword@mysql:3306/team_collaboration_dev"
+      # ✅ dev는 shadow를 root로 두어 권한 문제 방지
+      SHADOW_DATABASE_URL: "mysql://root:rootpassword@mysql:3306/team_collaboration_shadow_dev"
+      JWT_SECRET: "dev_jwt_secret_12345678901234567890123456789012"
+      ACCESS_TOKEN_SECRET: "dev_access_secret_abcdefghijklmnopqrstuvwxyz1234"
+      REFRESH_TOKEN_SECRET: "dev_refresh_secret_abcdefghijklmnopqrstuvwxyz5678"
+      ACCESS_TOKEN_EXPIRY: "15m"
+      REFRESH_TOKEN_EXPIRY: "7d"
+      API_PORT: "4000"
+      SOCKET_PORT: "5000"
+      NODE_ENV: "development"
+      FRONTEND_URL: "http://localhost:5173"
+    ports:
+      - "4000:4000"
+      - "5000:5000"
+      - "9229:9229" # Node --inspect 포트
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - node_modules_dev:/app/node_modules
+    networks:
+      - team_network_dev
+    command: >
+      sh -lc "
+        echo '🔄 DB migrate...' &&
+        npx prisma migrate dev --name init &&
+        echo '🚀 start dev server' &&
+        npm run dev
+      "
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prisma-studio:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    working_dir: /app
+    environment:
+      TZ: Asia/Seoul
+      DATABASE_URL: "mysql://teamuser:teampassword@mysql:3306/team_collaboration_dev"
+      NODE_ENV: "development"
+    volumes:
+      - ./backend:/app
+      - node_modules_dev:/app/node_modules
+    ports:
+      - "5555:5555"
+    networks:
+      - team_network_dev
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command:
+      [
+        "sh",
+        "-lc",
+        "exec npx prisma studio --port 5555 --hostname 0.0.0.0 --browser none",
+      ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - team_network_dev
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  mysql_dev_data:
+  node_modules_dev:
+  redis_dev_data:
+
+networks:
+  team_network_dev:
+    driver: bridge

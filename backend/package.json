@@ -1,0 +1,62 @@
+{
+  "name": "team-collaboration-backend",
+  "version": "2.0.0",
+  "description": "Team collaboration backend with Express, Socket.IO, and MySQL - New API Structure",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js",
+    "dev:watch": "nodemon src/index.js",
+    "docker:build": "docker build -t team-backend .",
+    "docker:run": "docker run -p 4000:4000 -p 5000:5000 -p 5555:5555 team-backend",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:dev": "docker-compose --profile dev up -d",
+    "prisma:migrate": "docker-compose exec backend npx prisma migrate dev",
+    "prisma:studio": "docker-compose exec backend npx prisma studio --hostname 0.0.0.0",
+    "prisma:studio-local": "npx prisma studio",
+    "prisma:reset": "docker-compose exec backend npx prisma migrate reset",
+    "prisma:generate": "docker-compose exec backend npx prisma generate",
+    "prisma:push": "docker-compose exec backend npx prisma db push",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "node src/seed.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "keywords": [
+    "express",
+    "socket.io",
+    "mysql",
+    "prisma",
+    "jwt",
+    "collaboration",
+    "workspace",
+    "friends",
+    "tasks"
+  ],
+  "author": "Team Collaboration",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.7.1",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.14.3",
+    "socket.io": "^4.7.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "prisma": "^5.7.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
